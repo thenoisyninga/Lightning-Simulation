@@ -11,7 +11,9 @@ let spreadDistance = width / 10;
 let angleSpread = 45;
 let size = 10;
 let dampingFactor = 1;
-let energyLossPerTransfer = 0.0;
+let energyLossPerTransfer = 0.05;
+let maxEnergy = 100;
+let energyDirection = random.range(0, Math.PI);
 
 const settings = {
   dimensions: [width, height],
@@ -65,7 +67,7 @@ class ChargedParticle {
   charge(nextChargeEnergy) {
     this.energyVector.add(nextChargeEnergy);
 
-    if (this.energyVector.magnitude() > 10000) {
+    if (this.energyVector.magnitude() > 100) {
       this.energyVector = new Vector2D(
         (this.energyVector.x / this.energyVector.x) * 100,
         (this.energyVector.y / this.energyVector.y) * 100
@@ -80,8 +82,8 @@ class ChargedParticle {
     context.beginPath();
     context.translate(this.pos.x, this.pos.y);
     context.lineWidth = 1;
-    context.strokeStyle = `rgba(255, 255, 255, ${colorWeight})`;
-    context.fillStyle = `rgba(255, 255, 255, ${colorWeight})`;
+    context.strokeStyle = `rgba(256, 256, 256, ${colorWeight})`;
+    context.fillStyle = `rgba(256, 256, 256, ${colorWeight})`;
 
     // if (this.energyVector.magnitude() == 0) {
     //   context.fillStyle = "red";
@@ -165,9 +167,10 @@ const sketch = ({ context, width, height }) => {
   }
 
   // Charge the starting particle
+
   particlesList[currentParticleIndex].energyVector = new Vector2D(
-    random.range(-100, 100),
-    random.range(-100, 100)
+    maxEnergy * Math.cos(energyDirection),
+    maxEnergy * Math.sin(energyDirection)
   );
   visitedParticlesList.push(currentParticleIndex);
 
