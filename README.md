@@ -1,2 +1,2 @@
 # Lightning Simulation
-A simple simulation of lightnind done using mattdesl's canvas-sketch.
+A simple simulation of lightning done using mattdesl's canvas-sketch.
