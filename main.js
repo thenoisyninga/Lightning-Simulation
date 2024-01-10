@@ -6,19 +6,17 @@ const random = require("canvas-sketch-util/random");
 let width = 2048;
 let height = 2048;
 
-let n = 5000;
-let spreadDistance = width / 10;
-let angleSpread = 45;
-let size = 10;
-let dampingFactor = 1;
+let n = 500;
+let spreadDistance = 250;
+let size = 15;
+let dampingFactor = 0.99;
+let connectionLineWidthMax = 5;
 let energyLossPerTransfer = 0.05;
-let maxEnergy = 100;
-let energyDirection = random.range(0, Math.PI);
 
 const settings = {
   dimensions: [width, height],
   animate: true,
-  fps: 120,
+  fps: 30,
   playbackRate: "throttle",
 };
 
@@ -52,48 +50,75 @@ class Vector2D {
   }
 }
 
+class ChargeConnection {
+  constructor(chargedParticle1, chargedParticle2) {
+    this.chargedParticle1 = chargedParticle1;
+    this.chargedParticle2 = chargedParticle2;
+    this.strength = 0;
+  }
+
+  calculateStrength() {
+    this.strength =
+      (this.chargedParticle1.charge + this.chargedParticle2.charge) / 2;
+  }
+
+  draw(context) {
+    this.calculateStrength();
+
+    context.save();
+    context.lineCap = "round";
+    context.strokeStyle = "white";
+    context.lineWidth = connectionLineWidthMax * this.strength + 1;
+    context.beginPath();
+    context.moveTo(this.chargedParticle1.pos.x, this.chargedParticle1.pos.y);
+    context.lineTo(this.chargedParticle2.pos.x, this.chargedParticle2.pos.y);
+    context.stroke();
+    context.restore();
+  }
+}
+
 class ChargedParticle {
   constructor(pos, dampingFactor) {
     this.pos = pos;
     this.dampingFactor = dampingFactor;
-    this.energyVector = new Vector2D(0, 0);
+    this.charge = 0;
     this.size = size;
   }
 
   dampen() {
-    this.energyVector = this.energyVector.multiply(this.dampingFactor);
+    this.charge *= dampingFactor;
   }
 
-  charge(nextChargeEnergy) {
-    this.energyVector.add(nextChargeEnergy);
-
-    if (this.energyVector.magnitude() > 100) {
-      this.energyVector = new Vector2D(
-        (this.energyVector.x / this.energyVector.x) * 100,
-        (this.energyVector.y / this.energyVector.y) * 100
-      );
-    }
+  chargeParticle(nextChargeEnergy) {
+    this.charge += nextChargeEnergy;
+    this.charge %= 1;
   }
 
+  // Draw the particles
   draw(context) {
-    let colorWeight = this.energyVector.magnitude() / 100;
-
     context.save();
     context.beginPath();
     context.translate(this.pos.x, this.pos.y);
     context.lineWidth = 1;
-    context.strokeStyle = `rgba(256, 256, 256, ${colorWeight})`;
-    context.fillStyle = `rgba(256, 256, 256, ${colorWeight})`;
 
-    // if (this.energyVector.magnitude() == 0) {
-    //   context.fillStyle = "red";
-    //   context.strokeStyle = "red";
+    context.strokeStyle = `rgba(256, 256, 256, 1)`;
+    context.fillStyle = `rgba(256, 256, 256, 1)`;
+
+    // if (this.charge == 0) {
+    //   context.strokeStyle = `rgba(256, 0, 0, 1)`;
+    //   context.fillStyle = `rgba(256, 0, 0, 1)`;
     // } else {
-    //   context.fillStyle = `rgb(${colorWeight}, ${colorWeight}, ${colorWeight})`;
-    //   context.strokeStyle = `rgb(${colorWeight}, ${colorWeight}, ${colorWeight})`;
+    //   context.strokeStyle = `rgba(256, 256, 256, ${this.charge})`;
+    //   context.fillStyle = `rgba(256, 256, 256, ${this.charge})`;
     // }
 
-    context.arc(0, 0, Math.abs(this.size / 2), 0, Math.PI * 2.0);
+    context.arc(
+      0,
+      0,
+      Math.abs((this.size / 2) * this.charge),
+      0,
+      Math.PI * 2.0
+    );
     context.stroke();
     context.fill();
     context.restore();
@@ -103,23 +128,10 @@ class ChargedParticle {
 const sketch = ({ context, width, height }) => {
   // Run on start
   let particlesList = [];
-  let visitedParticlesList = [];
+  let connectionsList = [];
 
   let currentParticleIndex = 0;
   let nextParticleIndex = -1;
-
-  let currentParticle = particlesList[currentParticleIndex];
-
-  function isVisited(particleIndex) {
-    let visited = false;
-    for (let i = 0; i < visitedParticlesList.length; i++) {
-      if (visitedParticlesList[i] == particleIndex) {
-        visited = true;
-        break;
-      }
-    }
-    return visited;
-  }
 
   function getNearbyParticle(currentParticleIndexP) {
     let currParticle = particlesList[currentParticleIndexP];
@@ -128,14 +140,7 @@ const sketch = ({ context, width, height }) => {
     for (let i = 0; i < n; i++) {
       let nextParticle = particlesList[i];
 
-      let angleToNext = Math.atan(
-        (currParticle.pos.x - nextParticle.pos.x) /
-          (currParticle.pos.y - nextParticle.pos.y)
-      );
-
-      let angleDifference =
-        ((angleToNext - currParticle.energyVector.direction()) / Math.PI) * 180;
-
+      // Calculating the distance between the particles
       particleDistance = Math.sqrt(
         Math.pow(currParticle.pos.x - nextParticle.pos.x, 2) +
           Math.pow(currParticle.pos.y - nextParticle.pos.y, 2)
@@ -144,11 +149,11 @@ const sketch = ({ context, width, height }) => {
       if (
         // The next particle is close enough
         particleDistance < spreadDistance &&
-        // checking if already visited
-        !isVisited(i)
-        // the particle is in the direction of the energy possessed
+        // checking if the particle already has charge or not
+        nextParticle.charge < 0.01
+        // checking if the particle is itself or not
         // &&
-        // Math.abs(angleDifference) <= angleSpread
+        // currentParticleIndex != nextParticleIndex
       ) {
         result = i;
         break;
@@ -168,47 +173,55 @@ const sketch = ({ context, width, height }) => {
 
   // Charge the starting particle
 
-  particlesList[currentParticleIndex].energyVector = new Vector2D(
-    maxEnergy * Math.cos(energyDirection),
-    maxEnergy * Math.sin(energyDirection)
-  );
-  visitedParticlesList.push(currentParticleIndex);
+  particlesList[currentParticleIndex].charge = 1;
+
+  let drawingComplete = false;
 
   // Run on each frame
   return ({ context, width, height }) => {
     context.fillStyle = "black";
     context.fillRect(0, 0, width, height);
 
-    // Select a nearby particle
-    nextParticleIndex = getNearbyParticle(currentParticleIndex);
-    console.log(`Marking ${nextParticleIndex} as visited.`);
-    visitedParticlesList.push(nextParticleIndex);
+    if (!drawingComplete) {
+      // Select a nearby particle
 
-    if (nextParticleIndex >= 0) {
-      // Charge the nearby particle accordingly
-      let nextChargeEnergy = particlesList[
-        currentParticleIndex
-      ].energyVector.multiply(1 - energyLossPerTransfer);
+      nextParticleIndex = getNearbyParticle(currentParticleIndex);
 
-      particlesList[nextParticleIndex].charge(nextChargeEnergy);
+      if (nextParticleIndex >= 0) {
+        // Charge the nearby particle accordingly
+        let nextChargeEnergy =
+          particlesList[currentParticleIndex].charge - energyLossPerTransfer;
 
-      // Set the new particle to current
-      console.log(
-        `${currentParticleIndex} : ${particlesList[
-          currentParticleIndex
-        ].energyVector.magnitude()} --> ${nextParticleIndex} : ${particlesList[
-          nextParticleIndex
-        ].energyVector.magnitude()}`
-      );
+        particlesList[nextParticleIndex].chargeParticle(nextChargeEnergy);
 
-      currentParticleIndex = nextParticleIndex;
-    } else {
-      console.log(`path ended on ${currentParticleIndex}`);
+        // Set the new particle to current
+        console.log(
+          `${currentParticleIndex} : ${particlesList[currentParticleIndex].charge} --> ${nextParticleIndex} : ${particlesList[nextParticleIndex].charge}`
+        );
+
+        // Register a connection between the particles
+        connectionsList.push(
+          new ChargeConnection(
+            particlesList[currentParticleIndex],
+            particlesList[nextParticleIndex]
+          )
+        );
+
+        currentParticleIndex = nextParticleIndex;
+      } else {
+        console.log(`path ended on ${currentParticleIndex}`);
+        drawingComplete = true;
+      }
     }
 
     // Draw the particles
-    for (let i = 0; i < n; i++) {
-      particlesList[i].draw(context);
+    // for (let i = 0; i < n; i++) {
+    //   particlesList[i].draw(context);
+    // }
+
+    // Draw the connections
+    for (let i = 0; i < connectionsList.length; i++) {
+      connectionsList[i].draw(context);
     }
 
     // Damp the particles
