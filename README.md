@@ -1,2 +1,2 @@
 # Lightning Simulation
-A simple simulation of lightning done using mattdesl's canvas-sketch.
+An attempt to simulate controlled lightning using mattdesl's canvas-sketch in javascript.
